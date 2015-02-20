@@ -1,0 +1,273 @@
+unit
+%Generate Closed Caption Page
+%Colin Creamer
+%Feb 27 2012
+
+%Displays the Generate Closed Caption page
+
+module GenPage
+    %---Imports/Exports---
+    %import GUI
+    export Show, Set
+
+    %----Global Vars------
+    const font := Font.New ("Arial:12")
+    var windowID : int
+    var Exit : boolean := false
+    %Paths
+    var soundTrackFile : string := "08 black or white.mp3"
+    var sourceTextFile : string := "RawLerix.txt"
+    var destFolder : string := Dir.Current
+    var outputFileName : string := "ClosedCapTest.txt"
+    %Arrays
+    var captionArray : flexible array 1 .. 0 of string
+    var captionResult : flexible array 1 .. 0 of string
+    %Keyboard
+    var chars : array char of boolean
+
+
+    %Setting Exports
+    proc Set (soundTrack, sourceText, dest, fileName : string)
+	soundTrackFile := soundTrack
+	sourceTextFile := sourceText
+	destFolder := dest
+	outputFileName := fileName
+    end Set
+
+
+    %---------------------------------------
+    %------------Functions--------------------
+    %---------------------------------------
+
+    %Reads Raw Lerix file into string array
+    procedure readCapsToArray
+	var fileNo : int                % Number of file
+	var line : string
+	open : fileNo, sourceTextFile, get
+	loop
+	    exit when eof (fileNo)
+	    get : fileNo, line : *
+	    line := Str.Trim (line) %Remove white spaces
+	    if line not= "" then %Skip empty lines
+		new captionArray, upper (captionArray) + 1
+		captionArray (upper (captionArray)) := line
+	    end if
+	end loop
+	close : fileNo
+    end readCapsToArray
+
+    procedure putCaptions
+	for c : 1 .. upper (captionResult)
+	    put captionResult (c)
+	end for
+    end putCaptions
+
+    procedure saveCaptions
+	var fileNo : int
+	open : fileNo, destFolder + "/" + outputFileName, put
+	for c : 1 .. upper (captionResult)
+	    put : fileNo, captionResult (c)
+	end for
+    end saveCaptions
+
+
+    /*Returns a interger as a string with a spesifed number of placeholders.
+     ___ num = the interger you want to be converted to a string
+     ___ placeValue:= The character to be used as a placeholder
+     ___ placeLength = the number of place values you want to be held.*/
+    function placeHolder (num : int, placeValue : char, placeLength : int) : string
+	var numStr := intstr (num)
+	var numDigits := length (numStr)
+	if numDigits >= placeLength then
+	    result numStr
+	end if
+	result repeat (placeValue, placeLength - numDigits) + numStr
+    end placeHolder
+
+    %Generates a standard time code string
+    function standardTimeCode (ms : int) : string
+	var hour, minute, second, frame, msTmp : int
+	msTmp := ms
+	hour := msTmp div 3600000
+	msTmp := msTmp mod 3600000
+	minute := msTmp div 60000
+	msTmp := msTmp mod 60000
+	second := msTmp div 1000
+	msTmp := msTmp mod 1000
+	frame := msTmp div (1000 / 30)
+	result placeHolder (hour, "0", 2) + ":" + placeHolder (minute, "0", 2) + ":" + placeHolder (second, "0", 2) + "," + placeHolder (frame, "0", 2)
+    end standardTimeCode
+
+
+
+    %Thouroughly Detects Esc key press
+    %Works in all screen Modes
+    fcn EscCatch () : boolean
+	for j : 1 .. 10 %100ms to catch key
+	    if hasch then
+		var ch : string (1)
+		getch (ch)
+		if ch = KEY_ESC then
+		    result true
+		end if
+	    end if
+	    delay (10)
+	end for
+	result false
+    end EscCatch
+
+
+    %--------------Main Exports-----------------
+
+    procedure Show
+	windowID := Window.Open ("graphics:600;250,offscreenonly, title:Closed Caption Generator, position:center;center")
+
+	%--------Main Program-------
+	setscreen ("offscreenonly,title:Closed Caption Generator,nobuttonbar")
+
+	readCapsToArray
+
+
+	colorback (20)
+	color (30)
+	cls
+
+	put " /----------------------------\\                 Closed Caption Generator"
+	put " |--------Instructions--------|                       By: Colin Creamer"
+	put " \\----------------------------/" 
+	put ""
+	put "   On start the sound track will play"
+	put "   A caption will be displayed."
+	put ""
+	put "   Press and hold space bar to set the In time of the caption."
+	put "   Release the space bar to set the Out time of the caption."
+	put ""
+	put "   The next Caption will be displayed. Repeat until the track is finished."
+	put ""
+
+	put "   Press any Key to continue"..
+	View.Update
+	Input.Pause
+	cls
+	color (black)
+	
+	
+	
+
+
+	var captionCount : int := upper (captionArray)
+	var startTime : int := Time.Elapsed
+	var ms : int
+	var spaceDown : boolean := false
+	var capInStr, capOutStr, nowTimeStr : string := "00:00:00,00"
+
+	Music.PlayFileReturn (soundTrackFile)
+
+
+
+	for c : 1 .. captionCount
+	    loop
+		ms := Time.Elapsed - startTime
+		nowTimeStr := standardTimeCode (ms)
+
+		Input.KeyDown (chars)
+		if not spaceDown then
+		    capInStr := nowTimeStr
+		    if chars (' ') then
+			spaceDown := true
+		    end if
+		else
+		    capOutStr := nowTimeStr
+		    if not chars (' ') then
+			spaceDown := false
+			%Add caption Code
+			const capUpper : int := upper (captionResult)
+			new captionResult, capUpper + 4
+			captionResult (capUpper + 1) := intstr (c)
+			captionResult (capUpper + 2) := capInStr + " --> " + capOutStr
+			captionResult (capUpper + 3) := captionArray (c)
+			captionResult (capUpper + 4) := ""
+			exit
+		    end if
+		end if
+
+		if chars (KEY_ESC) then
+		    Exit := true
+		end if
+
+
+		put "Closed Caption Generator"
+		put ""
+		put "TimeCode: ", nowTimeStr
+		put ""
+		put "Caption " + intstr (c) + " of " + intstr (captionCount)
+		put ""
+		put "       In               Out"
+
+		put "  " ..
+		if not spaceDown then
+		    colorback (30)
+		end if
+		put capInStr ..
+		colorback (white)
+		put "    " ..
+		if spaceDown then
+		    colorback (30)
+		end if
+		put capOutStr ..
+		colorback (white)
+		put ""
+
+		put ""
+
+		put "Current:  " ..
+		if spaceDown then
+		    colorback (43)
+		else
+		    colorback (yellow)
+		end if
+		put captionArray (c) ..
+		colorback (white)
+		put " "
+		put ""
+		if c not= captionCount then
+		    put "Next:     ", captionArray (c + 1)
+		end if
+
+		View.Update
+		cls
+		exit when Exit
+	    end loop
+	    exit when Exit
+	end for
+
+	if not Exit then
+
+	    put "No More Captions."
+	    put "Press any key to continue"
+	    View.Update
+	    Input.Pause
+	end if
+	Music.PlayFileStop
+
+	setscreen ("text")
+	put "Closed Caption Results"
+	put ""
+	put ""
+	putCaptions
+	put ""
+	put "press any key to save"
+	Input.Pause
+	put "saving ", outputFileName, "..."
+	saveCaptions
+	put "Done."
+
+
+	%Closes the window
+	Window.Close (windowID)
+
+    end Show
+
+end GenPage
+
+

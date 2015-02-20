@@ -1,0 +1,167 @@
+unit
+%InputBox Dialog Window Interface
+%Colin Creamer
+%August 2 2011
+
+%Displays the InputBox Page
+
+module InputBox
+    %---Imports/Exports---
+    import GUI %"..\\gui2.tu"
+    export Show
+
+    %----Global Vars------
+    const font := Font.New ("Arial:12")
+    var windowID : int
+    var screenShot : int
+
+    const screenStartY : int := 0 %The height at which the fade screen efect start
+
+    %Gui Widgits
+    var dialogMessage, inputField, ok_Btn, cancel_Btn : int
+
+    var returnText : string
+
+    %Preforms a window shake animation
+    proc windowShake (winID : int)
+	%Shake settings
+	const shakeTimes : int := 3
+	const shakeWidth : int := 20
+	const shakeSpeed : int := 1
+	%Gets original window position
+	var x, y : int
+	Window.GetPosition (winID, x, y)
+	%Do Shake
+	for t : 1 .. shakeTimes
+	    for s : 1 .. shakeWidth by shakeSpeed
+		Window.SetPosition (winID, x + s, y)
+	    end for
+	    for decreasing s : shakeWidth .. shakeWidth * -1 by shakeSpeed
+		Window.SetPosition (winID, x + s, y)
+	    end for
+	    for decreasing s : shakeWidth * -1 .. 0 by shakeSpeed
+		Window.SetPosition (winID, x + s, y)
+	    end for
+	end for
+	%Set back original position
+	Window.SetPosition (winID, x, y)
+	delay (500)
+    end windowShake
+
+    proc windowsDing
+	var soundPath : string := "C:\\Windows\\Media\\Windows Ding.wav"
+	%Try win XP path
+	if not File.Exists (soundPath) then
+	    soundPath := "C:\\Windows\\Media\\Windows XP Ding.wav"
+	end if
+	%Play Sound
+	if File.Exists (soundPath) then
+	    Music.PlayFileReturn (soundPath)
+	end if
+    end windowsDing
+
+    /*
+     procedure drawWindowScreen
+     %Create Revert Picture
+     screenShot := Pic.New (0, 0, maxx, maxy)
+     %Draw the screen
+     for i : 1 .. maxx + maxy by 2
+     Draw.Line (i, 0, 0, i, darkgrey)
+     end for
+     end drawWindowScreen
+     */
+
+    procedure drawWindowScreen
+
+	%Create Revert Picture
+	screenShot := Pic.New (0, screenStartY, maxx, maxy)
+	%Draw the screen
+       % Draw.Line (0, screenStartY, maxx, screenStartY, black)
+	for i : 1 .. maxx + (maxy - screenStartY) by 2
+	    Draw.Line (i, screenStartY, 0, i + screenStartY, 185)
+	end for
+    end drawWindowScreen
+
+
+    procedure removeWindowScreen
+	Pic.Draw (screenShot, 0, screenStartY, picCopy)
+	Pic.Free (screenShot)
+    end removeWindowScreen
+
+
+    %----Action Funtions-----
+
+
+    %When the user hits enter in the text feild
+    proc enter_Fnc (text : string)
+	returnText := text
+	GUI.Quit
+    end enter_Fnc
+
+    %when the user click OK
+    proc ok_Fnc
+	enter_Fnc (GUI.GetText (inputField))
+    end ok_Fnc
+
+    %when the user click Cancel
+    proc cancel_Fnc
+	%returnText := ""
+	GUI.Quit
+    end cancel_Fnc
+
+
+    %-----Main Export------
+
+    function Show (message, title, defultText : string) : string
+	drawWindowScreen
+	var mx,my,mb,winX,winY : int
+	mousewhere(mx,my,mb)
+	Window.GetPosition(Window.GetActive,winX,winY)
+	winX+=mx - 100
+	winY+=my - 50
+	
+	windowID := Window.Open ("nobuttonbar,title:" + title + ", position:"+intstr(winX)+";"+intstr(winY)+",graphics:200;100")
+
+	Draw.FillBox (0, 0, maxx, 40, 30)
+	%Pic.Draw (backgroundSkin, -100, -302, picCopy)
+
+	%Inishalize GUI widgits
+	dialogMessage := GUI.CreateLabelFull (5, 30, message, 20, 65, GUI.TOP, 0)
+	inputField := GUI.CreateTextFieldFull (20, 50, maxx - 40, defultText, enter_Fnc, GUI.INDENT, 0, 0)
+	ok_Btn := GUI.CreateButton (70, 8, 50, "OK", ok_Fnc)
+	cancel_Btn := GUI.CreateButton (120, 8, 10, "Cancel", cancel_Fnc)
+
+	if defultText not= "" then
+	    GUI.SetSelection (inputField, 1, 256)
+	end if
+
+	returnText := defultText
+	loop
+	    if Window.GetActive not= windowID and not Window.GetActive = -5 then
+		Window.SetActive (windowID) %Sets Diolog Active
+		windowsDing
+		windowShake (windowID)
+	    else
+		exit when GUI.ProcessEvent
+	    end if
+	end loop
+	GUI.ResetQuit
+	/*
+	 %UN-Inishalize widgits
+	 GUI.Dispose (dialogMessage)
+	 GUI.Dispose (inputField)
+	 GUI.Dispose (ok_Btn)
+	 GUI.Dispose (cancel_Btn)
+	 Window.Close (windowID)
+	 */
+
+	%Closes the window and Disposed of all GUI Wigits in it
+	GUI.CloseWindow (windowID)
+
+	removeWindowScreen
+	result returnText
+    end Show
+
+end InputBox
+
+

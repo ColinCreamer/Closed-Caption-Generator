@@ -1,0 +1,313 @@
+unit
+%Generate Closed Caption Page
+%Colin Creamer
+%Feb 27 2012
+
+%Displays the Generate Closed Caption page
+
+module GenPage
+    %---Imports/Exports---
+    import
+
+	"../ShaddyUI.tu",
+
+    %Embedded Images
+	"../EI Library/EI_Manager.tu"
+
+    export Show, Set
+
+    %----Global Vars------
+    var windowID : int
+    var Exit : boolean := false
+    var backgroundPicID : int
+
+    %Paths
+    var soundTrackFile : string := "08 black or white.mp3"
+    var sourceTextFile : string := "RawLerix.txt"
+    var destFolder : string := Dir.Current
+    var outputFileName : string := "ClosedCapTest.txt"
+    %Arrays
+    var captionArray : flexible array 1 .. 0 of string
+    var captionResult : flexible array 1 .. 0 of string
+    %Keyboard
+    var chars : array char of boolean
+
+
+    %Main Vars
+    var captionCount : int := upper (captionArray)
+    var startTime : int
+    var ms : int
+    var spaceDown : boolean := false
+    var capInStr, capOutStr, nowTimeStr : string := "00:00:00,00"
+
+    %Initialise Fonts ----
+    var font : int
+    font := Font.New ("Arial:9")
+    assert font > 0
+
+    var font_TimeCode : int
+    font_TimeCode := Font.New ("Myriad Pro:12:bold")
+    assert font_TimeCode > 0
+
+    var font_Numbering : int
+    font_Numbering := Font.New ("Arial:8")
+    assert font_Numbering > 0
+
+    var font_NextCap : int
+    font_NextCap := Font.New ("Arial:10")
+    assert font_NextCap > 0
+
+    var font_MainCap : int
+    font_MainCap := Font.New ("Arial:18")
+    assert font_MainCap > 0
+
+
+
+    %Setting Exports
+    proc Set (soundTrack, sourceText, dest, fileName : string)
+	soundTrackFile := soundTrack
+	sourceTextFile := sourceText
+	destFolder := dest
+	outputFileName := fileName
+    end Set
+
+
+
+    %----------------------------------------
+    %-----Load Graphics----------------------
+    %----------------------------------------
+
+    proc loadImageGraphics
+	Pic.Draw (EI.IDbyName ("Generate Page.bmp"), 0, 0, picCopy)
+	Pic.Draw (EI.IDbyName ("Title.bmp"), 25, 208, picMerge)
+	backgroundPicID := Pic.New (0, 0, maxx, maxy)
+    end loadImageGraphics
+
+
+    procedure drawLables
+	var mx, my, mb : int
+	mousewhere (mx, my, mb)
+	setscreen ("title:mx:" + intstr (mx) + "  my:" + intstr (my))
+    end drawLables
+    %---------------------------------------
+    %------------Functions--------------------
+    %---------------------------------------
+
+
+
+    %Reads Raw Lerix file into string array
+    procedure readCapsToArray
+	var fileNo : int                % Number of file
+	var line : string
+	open : fileNo, sourceTextFile, get
+	loop
+	    exit when eof (fileNo)
+	    get : fileNo, line : *
+	    line := Str.Trim (line) %Remove white spaces
+	    if line not= "" then %Skip empty lines
+		new captionArray, upper (captionArray) + 1
+		captionArray (upper (captionArray)) := line
+	    end if
+	end loop
+	close : fileNo
+    end readCapsToArray
+
+    procedure putCaptions
+	for c : 1 .. upper (captionResult)
+	    put captionResult (c)
+	end for
+    end putCaptions
+
+    procedure saveCaptions
+	var fileNo : int
+	open : fileNo, destFolder + "/" + outputFileName, put
+	for c : 1 .. upper (captionResult)
+	    put : fileNo, captionResult (c)
+	end for
+    end saveCaptions
+
+
+    /*Returns a interger as a string with a spesifed number of placeholders.
+     ___ num = the interger you want to be converted to a string
+     ___ placeValue:= The character to be used as a placeholder
+     ___ placeLength = the number of place values you want to be held.*/
+    function placeHolder (num : int, placeValue : char, placeLength : int) : string
+	var numStr := intstr (num)
+	var numDigits := length (numStr)
+	if numDigits >= placeLength then
+	    result numStr
+	end if
+	result repeat (placeValue, placeLength - numDigits) + numStr
+    end placeHolder
+
+    %Generates a standard time code string
+    function standardTimeCode (ms : int) : string
+	var hour, minute, second, frame, msTmp : int
+	msTmp := ms
+	hour := msTmp div 3600000
+	msTmp := msTmp mod 3600000
+	minute := msTmp div 60000
+	msTmp := msTmp mod 60000
+	second := msTmp div 1000
+	msTmp := msTmp mod 1000
+	frame := msTmp div (1000 / 30)
+	result placeHolder (hour, "0", 2) + ":" + placeHolder (minute, "0", 2) + ":" + placeHolder (second, "0", 2) + "," + placeHolder (frame, "0", 2)
+    end standardTimeCode
+
+
+
+
+
+    %--------------Main Exports-----------------
+    var lastActiveWinID : int
+
+    procedure Show
+	lastActiveWinID := Window.GetActive ()
+	windowID := Window.Open ("graphics:600;250,offscreenonly, title:Closed Caption Generator, position:center;center")
+	Window.Hide (lastActiveWinID)
+
+	%--------Main Program-------
+	readCapsToArray
+
+
+	colorback (20)
+	color (30)
+	cls
+
+	put " /----------------------------\\                 Closed Caption Generator"
+	put " |--------Instructions--------|                       By: Colin Creamer"
+	put " \\----------------------------/"
+	put ""
+	put "   On start the sound track will play"
+	put "   A caption will be displayed."
+	put ""
+	put "   Press and hold space bar to set the In time of the caption."
+	put "   Release the space bar to set the Out time of the caption."
+	put ""
+	put "   The next Caption will be displayed. Repeat until the track is finished."
+	put ""
+
+	put "   Press any Key to continue" ..
+	View.Update
+	Input.Pause
+	cls
+	color (black)
+
+
+
+	loadImageGraphics
+	drawLables
+
+	Music.PlayFileReturn (soundTrackFile)
+	
+	startTime := Time.Elapsed
+	captionCount := upper (captionArray)
+
+	for c : 1 .. captionCount
+	    loop
+		ms := Time.Elapsed - startTime
+		nowTimeStr := standardTimeCode (ms)
+
+		Input.KeyDown (chars)
+		if not spaceDown then
+		    capInStr := nowTimeStr
+		    if chars (' ') then
+			spaceDown := true
+		    end if
+		else
+		    capOutStr := nowTimeStr
+		    if not chars (' ') then
+			spaceDown := false
+			%Add caption Code
+			const capUpper : int := upper (captionResult)
+			new captionResult, capUpper + 4
+			captionResult (capUpper + 1) := intstr (c)
+			captionResult (capUpper + 2) := capInStr + " --> " + capOutStr
+			captionResult (capUpper + 3) := captionArray (c)
+			captionResult (capUpper + 4) := ""
+			exit
+		    end if
+		end if
+
+		if chars (KEY_ESC) then
+		    Input.Pause
+		    put "exiting"
+		    Exit := true
+		end if
+
+
+
+		Pic.Draw (backgroundPicID, 0, 0, picCopy)
+		%drawLables
+
+		Draw.Text (capInStr, 68, 158, font_TimeCode, 20)
+		Draw.Text (capOutStr, 194, 158, font_TimeCode, 20)
+		Draw.Text (intstr (c) + "of" + intstr (captionCount), 512, 176, font_NextCap, 23)
+
+
+		if spaceDown then
+		    Pic.Draw (EI.IDbyName ("Brackets.bmp"), 184, 155, picMerge)
+		else
+		    Pic.Draw (EI.IDbyName ("Brackets.bmp"), 60, 155, picMerge)
+		end if
+
+		%Draw next Caption list
+		const nextCapOffset : int := 15
+		var nextCapColor : int
+		for i : -1 .. 2
+		    const nextNum : int := c + i
+		    if nextNum >= 1 and nextNum <= upper (captionArray) then
+			if i = 0 then
+			    if spaceDown then
+				nextCapColor := 113
+			    else
+				nextCapColor := black
+			    end if
+			    Draw.Text (captionArray (c), 56, 100, font_MainCap, nextCapColor)
+			else
+			    nextCapColor := 22 + (i)
+			end if
+			Draw.Text (captionArray (nextNum), 75, 53 - (nextCapOffset * i), font_Numbering, nextCapColor)
+			Draw.Text (intstr (nextNum), 54, 53 - (nextCapOffset * i), font_Numbering, nextCapColor)
+		    end if
+		end for
+
+
+		View.Update
+		cls
+		exit when Exit
+	    end loop
+	    exit when Exit
+	end for
+
+	if not Exit then
+
+	    put "No More Captions."
+	    put "Press any key to continue"
+	    View.Update
+	    Input.Pause
+	end if
+	Music.PlayFileStop
+
+	setscreen ("text")
+	put "Closed Caption Results"
+	put ""
+	put ""
+	putCaptions
+	put ""
+	put "press any key to save"
+	Input.Pause
+	put "saving ", outputFileName, "..."
+	saveCaptions
+	put "Done."
+
+
+	%Closes the window
+	Window.Close (windowID)
+	Window.Show (lastActiveWinID)
+
+    end Show
+
+end GenPage
+
+

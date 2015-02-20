@@ -1,0 +1,124 @@
+unit
+%System Info Window Interface
+%Colin Creamer
+%January 31 2012
+
+%Displays the System info Page
+
+module SysInfo
+    %---Imports/Exports---
+    import /*GUI*/ "..\\gui2.tu"
+    export Show, GetOutboundIP
+
+    %----Global Vars------
+    const font := Font.New ("Arial:12")
+    var windowID : int
+    var done_Btn : int
+
+
+
+
+    function GetOutboundIP () : string
+	var netStream : int
+	var ip : string
+	const url : string := "http://root.fireplanet.ca/misc/myip/"
+	netStream := Net.OpenURLConnection (url)
+	if netStream <= 0 then
+	    ip := "Unknown"
+	end if
+	get : netStream, ip
+	Net.CloseConnection (netStream)
+	result ip
+    end GetOutboundIP
+
+    var firstRun : boolean := true
+    var CashedOutBoundIp, CashedHostName : string := "Unknown"
+
+    fcn OutBoundIp () : string
+	if firstRun then
+	    firstRun := false
+	    CashedOutBoundIp := GetOutboundIP ()
+	    CashedHostName := Net.HostNameFromAddress (CashedOutBoundIp)
+	end if
+	result CashedOutBoundIp
+    end OutBoundIp
+
+
+
+    procedure Show
+	windowID := Window.Open ("graphics:250;200, title:System info, position:center;center")
+	done_Btn := GUI.CreateButton (maxx div 2 - 50, 10, 100, "Done", GUI.Quit)
+
+
+
+	%Lables
+	var labelNames : array 1 .. * of string := init (
+	    "Login: ",
+	    "Computer: ",
+	    "Local Net Name: ",
+	    "Local IP: "
+	   % "Outbound IP: ",
+	    %"Host Name: "
+	    )
+	var lableID : array 1 .. upper (labelNames) of int
+
+	labelNames (1) += Sys.GetUserName
+	labelNames (2) += Sys.GetComputerName
+	labelNames (3) += Net.LocalName
+	labelNames (4) += Net.LocalAddress
+	%labelNames (5) += OutBoundIp ()
+	%labelNames (6) += CashedHostName
+
+	%--------inishalizeLables-------
+	% proc inishalizeLables
+
+	%Settings
+	var x : int := 0
+	var y : int := 40
+	const lineColor : int := darkgrey
+	const width : int := maxx
+	const height : int := maxy - 50
+	const marginX : int := 10
+	const marginY : int := 10
+
+	%Calculated Table Vars
+	const tableStartY : int := height - (marginY * 2)         %Y pos of the tables top left corner
+	const rowHeight : int := (tableStartY) div upper (labelNames) %Calculated height of a table row
+	var rY : int := y + marginY + tableStartY %Global Y Position of row line
+	var rX : int := x + marginX             %Global Left X Positions of row line
+	var rXX : int := x + width - marginX    %Global Right X Positions of row line
+
+	%Draws Rows
+	%Draw.Line (rX, rY, rXX, rY, lineColor) %Draws top line
+	for i : 1 .. upper (labelNames)
+	    %Row Calculations
+	    rY := y + marginY + tableStartY - (rowHeight * i)
+	    rX := x + marginX
+	    rXX := x + width - marginX
+	    %Draws Rows
+	    Draw.Line (rX, rY, rXX, rY, lineColor)
+	    lableID (i) := GUI.CreateLabelFull (0, rY + 2, labelNames (i), width, rowHeight, GUI.CENTER + GUI.MIDDLE, 0)
+	end for
+
+	%end inishalizeLables
+
+
+
+	loop
+	    %if Window.GetActive = defWinID then
+	    if Window.GetActive not= windowID and not Window.GetActive = -5 then
+		GUI.Quit
+	    end if
+	    exit when GUI.ProcessEvent
+	    Time.DelaySinceLast (15)
+	end loop
+	GUI.ResetQuit
+
+	%Closes the window and Disposed of all GUI Wigits in it
+	GUI.CloseWindow (windowID)
+
+    end Show
+
+end SysInfo
+
+
